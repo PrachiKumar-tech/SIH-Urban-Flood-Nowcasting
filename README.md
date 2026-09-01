@@ -98,7 +98,10 @@ Dashboard will be available at: `http://127.0.0.1:5173/`
 ```bash
 python -m pytest -v backend/tests/
 ```
-
+### One Liner
+```bash
+python -m pip install -r backend/requirements.txt; npm --prefix frontend install; npx concurrently "python -m uvicorn backend.main:app --host 127.0.0.1 --port 8000 --reload" "npm --prefix frontend run dev"
+```
 ---
 
 ## 🧪 6. Demonstration Scenarios
