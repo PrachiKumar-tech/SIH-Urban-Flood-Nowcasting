@@ -46,6 +46,18 @@ class PreTrainedFloodXGBoostSurrogate:
             with open(self.model_path, "rb") as f:
                 self.model = pickle.load(f)
             
+            if hasattr(self.model, "feature_names_in_"):
+                self.feature_names = list(self.model.feature_names_in_)
+            else:
+                self.feature_names = [
+                    "elevation",
+                    "slope_deg",
+                    "flow_accum",
+                    "imperviousness",
+                    "drainage_capacity_estimated",
+                    "rainfall_mm"
+                ]
+            
             # Extract true feature importances from the loaded XGBoost model
             fi = self.model.feature_importances_
             self.feature_importances = {name: round(float(val), 4) for name, val in zip(self.feature_names, fi)}
@@ -62,7 +74,7 @@ class PreTrainedFloodXGBoostSurrogate:
                 "inference_latency_ms": 0.38,
                 "physical_solver_latency_ms": 14.5,
                 "speedup_factor": "38.2x",
-                "study_area": "Delhi Yamuna Basin & Central Catchment"
+                "study_area": "South Jaipur (Jawahar Circle, Malviya Nagar & Sanganer Catchment)"
             }
         else:
             # Fallback inline training if pickle not found
@@ -74,14 +86,13 @@ class PreTrainedFloodXGBoostSurrogate:
         slope = self.city.slope_deg_grid.flatten()
         flow = self.city.log_flow_accum.flatten()
         imp = self.city.imperviousness_grid.flatten()
-        drain = self.city.real_drain_mask.flatten()
         cap = self.city.drainage_capacity_estimated.flatten()
         
         rows = []
         for rain in [20, 50, 80, 120]:
             target = np.clip(rain * 0.15 * (0.4 + 0.6 * imp) * (0.3 + 0.7 * (flow / 5.0)) - np.minimum(cap * 0.15, 8.0), 0, None)
             for i in range(len(elev)):
-                rows.append([elev[i], slope[i], flow[i], imp[i], drain[i], cap[i], rain, target[i]])
+                rows.append([elev[i], slope[i], flow[i], imp[i], cap[i], rain, target[i]])
         
         df = pd.DataFrame(rows, columns=self.feature_names + ["target_depth_cm"])
         X, y = df[self.feature_names], df["target_depth_cm"]
@@ -98,7 +109,8 @@ class PreTrainedFloodXGBoostSurrogate:
             "feature_importances": {name: round(float(val), 4) for name, val in zip(self.feature_names, self.model.feature_importances_)},
             "inference_latency_ms": 0.40,
             "physical_solver_latency_ms": 14.5,
-            "speedup_factor": "36.0x"
+            "speedup_factor": "36.0x",
+            "study_area": "South Jaipur (Jawahar Circle, Malviya Nagar & Sanganer Catchment)"
         }
 
     def predict_vectorized(self, feature_array: np.ndarray) -> np.ndarray:

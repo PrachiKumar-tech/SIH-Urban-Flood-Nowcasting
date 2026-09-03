@@ -57,9 +57,9 @@ export const FloodMap: React.FC<FloodMapProps> = ({
   useEffect(() => {
     if (!mapContainerRef.current || mapInstanceRef.current) return;
 
-    // Center on Delhi Pilot Catchment / Yamuna Corridor (28.635° N, 77.250° E)
-    const centerLat = 28.6350;
-    const centerLng = 77.2500;
+    // Center on South Jaipur Pilot Catchment / Jawahar Circle - Malviya Nagar - Airport Corridor (26.8225° N, 75.8275° E)
+    const centerLat = 26.8225;
+    const centerLng = 75.8275;
 
     const map = L.map(mapContainerRef.current, {
       center: [centerLat, centerLng],
@@ -68,27 +68,27 @@ export const FloodMap: React.FC<FloodMapProps> = ({
       attributionControl: true,
     });
 
-    // 1. Esri World Dark Gray Canvas Base (Free, open, zero watermark, clean dark geospatial style)
+    // Google Maps Roadmap style basemap (Cleaned: POIs, shops, and transit icons hidden; roads, rivers, and areas preserved)
     const baseLayer = L.tileLayer(
-      'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}',
+      'https://mt{s}.google.com/vt/lyrs=m&apistyle=s.t:2|p.v:off,s.t:4|s.e:l.i|p.v:off&x={x}&y={y}&z={z}',
       {
-        maxZoom: 16,
-        attribution: 'Tiles &copy; Esri &mdash; Esri, DeLorme, NAVTEQ',
+        maxZoom: 20,
+        subdomains: ['0', '1', '2', '3'],
+        attribution: '&copy; <a href="https://maps.google.com" target="_blank" rel="noopener noreferrer">Google Maps</a>',
       }
     );
 
-    // 2. Esri World Dark Gray Reference Layer (Crisp street names, landmarks, waterways)
-    const referenceLayer = L.tileLayer(
-      'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}',
-      {
-        maxZoom: 16,
-        pane: 'overlayPane',
-        opacity: 0.85,
-      }
-    );
+    // Graceful fallback to OpenStreetMap if ever needed
+    baseLayer.on('tileerror', () => {
+      console.warn('Google Maps tile error. Falling back to OpenStreetMap.');
+      const fallbackLayer = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19,
+        attribution: '&copy; OpenStreetMap contributors',
+      });
+      fallbackLayer.addTo(map);
+    });
 
     baseLayer.addTo(map);
-    referenceLayer.addTo(map);
 
     L.control.zoom({ position: 'bottomright' }).addTo(map);
 
@@ -128,39 +128,43 @@ export const FloodMap: React.FC<FloodMapProps> = ({
 
     if (!floodMap) return;
 
+    // Geographic cell delta for seamless tile coverage (South Jaipur: 45 milli-deg lat & 45 milli-deg lng)
+    const dLat = 0.045000 / 36 / 2.0;
+    const dLng = 0.045000 / 36 / 2.0;
+
     if (layers.floodDepth || layers.elevationDEM || layers.floodProbability) {
       floodMap.cells.forEach((cell) => {
         const bounds: L.LatLngBoundsExpression = [
-          [cell.lat - 0.00058, cell.lng - 0.00042],
-          [cell.lat + 0.00058, cell.lng + 0.00042],
+          [cell.lat - dLat, cell.lng - dLng],
+          [cell.lat + dLat, cell.lng + dLng],
         ];
 
-        // 1. Flood Depth Layer
-        if (layers.floodDepth && cell.water_depth_cm > 1.5) {
-          let fillColor = '#10b981';
-          let fillOpacity = 0.28;
+        // 1. Flood Depth Layer (Renders data-backed depth >= 0.1 cm matching plots.ipynb)
+        if (layers.floodDepth && cell.water_depth_cm >= 0.1) {
+          let fillColor = '#38bdf8';
+          let fillOpacity = 0.32;
 
-          if (cell.water_depth_cm >= 30) {
-            fillColor = '#ef4444';
-            fillOpacity = 0.65;
-          } else if (cell.water_depth_cm >= 15) {
-            fillColor = '#f97316';
-            fillOpacity = 0.50;
-          } else if (cell.water_depth_cm >= 5) {
-            fillColor = '#eab308';
-            fillOpacity = 0.38;
+          if (cell.water_depth_cm >= 25.0) {
+            fillColor = '#dc2626'; // Deep Red - Critical Inundation
+            fillOpacity = 0.72;
+          } else if (cell.water_depth_cm >= 10.0) {
+            fillColor = '#ea580c'; // Orange - Moderate to High Flood
+            fillOpacity = 0.58;
+          } else if (cell.water_depth_cm >= 2.0) {
+            fillColor = '#ca8a04'; // Amber - Curb Level Ponding / Watch
+            fillOpacity = 0.44;
           }
 
           const rect = L.rectangle(bounds, {
             color: fillColor,
             weight: 0.5,
-            opacity: 0.3,
+            opacity: 0.45,
             fillColor: fillColor,
             fillOpacity: fillOpacity,
           });
           rect.bindTooltip(
             `<div class="space-y-1 text-slate-100 text-xs">
-              <div class="font-bold text-slate-200">Grid Cell (${cell.grid_y}, ${cell.grid_x})</div>
+              <div class="font-bold text-white">Grid Cell (${cell.grid_y}, ${cell.grid_x})</div>
               <div>Water Depth: <span style="color:${fillColor}; font-weight:700">${cell.water_depth_cm.toFixed(1)} cm</span></div>
               <div class="text-slate-300">DEM Elevation: ${cell.elevation_m.toFixed(1)} m MSL</div>
               <div class="text-slate-300">Imperviousness: ${(cell.imperviousness * 100).toFixed(0)}%</div>
@@ -171,18 +175,18 @@ export const FloodMap: React.FC<FloodMapProps> = ({
           rect.addTo(lg.floodDepth);
         }
 
-        // 2. DEM Elevation Layer
+        // 2. DEM Elevation Layer (Normalized for South Jaipur: 354m to 438m MSL)
         if (layers.elevationDEM) {
-          const normElev = Math.min(Math.max((cell.elevation_m - 202) / 30, 0), 1);
+          const normElev = Math.min(Math.max((cell.elevation_m - 354.0) / 84.0, 0), 1);
           const hue = 210 - normElev * 150;
           const elevColor = `hsl(${hue}, 65%, 45%)`;
 
           const elevRect = L.rectangle(bounds, {
             color: elevColor,
             weight: 0.3,
-            opacity: 0.2,
+            opacity: 0.3,
             fillColor: elevColor,
-            fillOpacity: 0.32,
+            fillOpacity: 0.35,
           });
           elevRect.bindTooltip(`Elevation: <strong>${cell.elevation_m.toFixed(1)} m MSL</strong>`, { sticky: true });
           elevRect.addTo(lg.elevation);
@@ -190,12 +194,13 @@ export const FloodMap: React.FC<FloodMapProps> = ({
 
         // 3. Flood Probability Layer
         if (layers.floodProbability && cell.flood_probability > 0.15) {
-          const probColor = cell.flood_probability > 0.7 ? '#f43f5e' : cell.flood_probability > 0.4 ? '#fb923c' : '#fde047';
+          const probColor = cell.flood_probability > 0.7 ? '#dc2626' : cell.flood_probability > 0.4 ? '#ea580c' : '#ca8a04';
           const probRect = L.rectangle(bounds, {
             color: probColor,
-            weight: 0,
+            weight: 0.5,
+            opacity: 0.4,
             fillColor: probColor,
-            fillOpacity: cell.flood_probability * 0.45,
+            fillOpacity: cell.flood_probability * 0.48,
           });
           probRect.bindTooltip(`Flood Probability: <strong>${(cell.flood_probability * 100).toFixed(0)}%</strong>`, { sticky: true });
           probRect.addTo(lg.probability);
@@ -212,31 +217,31 @@ export const FloodMap: React.FC<FloodMapProps> = ({
     if (!layers.rainfallRadar || !floodMap) return;
 
     const progress = Math.min(Math.max(timeOffsetMin / 180, 0), 1);
-    const stormLat = 28.648 - 0.024 * progress;
-    const stormLng = 77.240 + 0.022 * progress;
+    const stormLat = 26.840 - 0.030 * progress;
+    const stormLng = 75.815 + 0.025 * progress;
 
     L.circle([stormLat, stormLng], {
       radius: 1200,
-      color: '#ef4444',
-      weight: 1,
-      fillColor: '#ef4444',
-      fillOpacity: 0.20,
+      color: '#dc2626',
+      weight: 1.5,
+      fillColor: '#dc2626',
+      fillOpacity: 0.22,
     }).addTo(lg.rainfallRadar);
 
     L.circle([stormLat, stormLng], {
       radius: 2200,
-      color: '#f97316',
-      weight: 1,
-      fillColor: '#f97316',
-      fillOpacity: 0.12,
+      color: '#ea580c',
+      weight: 1.2,
+      fillColor: '#ea580c',
+      fillOpacity: 0.14,
     }).addTo(lg.rainfallRadar);
 
     L.circle([stormLat, stormLng], {
       radius: 3500,
-      color: '#06b6d4',
+      color: '#0284c7',
       weight: 1,
-      fillColor: '#06b6d4',
-      fillOpacity: 0.06,
+      fillColor: '#0284c7',
+      fillOpacity: 0.08,
     }).addTo(lg.rainfallRadar);
   }, [floodMap, layers.rainfallRadar, timeOffsetMin]);
 
@@ -249,19 +254,19 @@ export const FloodMap: React.FC<FloodMapProps> = ({
 
     drainageStatus.pipes.forEach((pipe) => {
       const isSurcharged = pipe.utilization_pct >= 100;
-      const pipeColor = isSurcharged ? '#ef4444' : pipe.utilization_pct > 75 ? '#f59e0b' : '#0284c7';
-      const weight = isSurcharged ? 3.5 : 2;
+      const pipeColor = isSurcharged ? '#dc2626' : pipe.utilization_pct > 75 ? '#d97706' : '#0284c7';
+      const weight = isSurcharged ? 3.5 : 2.5;
 
       const polyline = L.polyline(pipe.coordinates, {
         color: pipeColor,
         weight: weight,
-        opacity: 0.9,
+        opacity: 0.95,
         dashArray: isSurcharged ? undefined : '5, 5',
       });
 
       polyline.bindTooltip(
         `<div class="space-y-1 text-slate-100 text-xs">
-          <div class="font-bold text-slate-200">Pipe ${pipe.id} (${pipe.diameter_m}m &Oslash;)</div>
+          <div class="font-bold text-white">Pipe ${pipe.id} (${pipe.diameter_m}m &Oslash;)</div>
           <div class="text-slate-300">Flow: ${pipe.current_flow_m3_s} / ${pipe.capacity_m3_s} m³/s</div>
           <div>Capacity Load: <strong style="color:${pipeColor}">${pipe.utilization_pct}%</strong></div>
         </div>`,
@@ -272,30 +277,30 @@ export const FloodMap: React.FC<FloodMapProps> = ({
 
     drainageStatus.nodes.forEach((node) => {
       const isSurcharged = node.is_surcharged;
-      const nodeColor = isSurcharged ? '#ef4444' : '#10b981';
+      const nodeColor = isSurcharged ? '#dc2626' : '#059669';
 
       const circleMarker = L.circleMarker([node.lat, node.lng], {
-        radius: isSurcharged ? 6.5 : 4.5,
+        radius: isSurcharged ? 7 : 5,
         color: '#ffffff',
-        weight: 1.5,
+        weight: 2,
         fillColor: nodeColor,
-        fillOpacity: 0.95,
+        fillOpacity: 1.0,
       });
 
       if (isSurcharged) {
         L.circleMarker([node.lat, node.lng], {
-          radius: 12,
-          color: '#ef4444',
-          weight: 1,
-          fillColor: '#ef4444',
-          fillOpacity: 0.22,
+          radius: 13,
+          color: '#dc2626',
+          weight: 1.5,
+          fillColor: '#dc2626',
+          fillOpacity: 0.25,
         }).addTo(lg.drainage);
       }
 
       circleMarker.bindTooltip(
         `<div class="space-y-1 text-slate-100 text-xs">
-          <div class="font-bold text-slate-200">${node.name} (${node.id})</div>
-          <div>State: <span style="color:${nodeColor}; font-weight:700">${isSurcharged ? 'SURCHARGED (OVERFLOW)' : 'NORMAL GRAVITY FLOW'}</span></div>
+          <div class="font-bold text-white">${node.name} (${node.id})</div>
+          <div>State: <span style="color:${nodeColor}; font-weight:700">${isSurcharged ? 'SURCHARGED (OVERFLOW)' : 'NORMAL CAPACITY'}</span></div>
           <div class="text-slate-300">Inflow: ${node.inflow_m3_s} m³/s | Cap: ${node.current_capacity_m3_s} m³/s</div>
           <div class="text-cyan-400 text-[10px]">Click for node telemetry</div>
         </div>`,
@@ -315,29 +320,29 @@ export const FloodMap: React.FC<FloodMapProps> = ({
     if (!layers.roads || !roadStatus) return;
 
     roadStatus.roads.forEach((road) => {
-      let roadColor = '#10b981';
+      let roadColor = '#059669';
       let weight = 3.5;
 
       if (road.status === 'CLOSED') {
-        roadColor = '#ef4444';
-        weight = 5;
+        roadColor = '#dc2626';
+        weight = 5.5;
       } else if (road.status === 'RESTRICTED') {
-        roadColor = '#f97316';
+        roadColor = '#ea580c';
         weight = 4.5;
       } else if (road.status === 'CAUTION') {
-        roadColor = '#eab308';
+        roadColor = '#d97706';
         weight = 4;
       }
 
       const polyline = L.polyline(road.coordinates, {
         color: roadColor,
         weight: weight,
-        opacity: 0.92,
+        opacity: 0.95,
       });
 
       polyline.bindTooltip(
         `<div class="space-y-1 text-slate-100 text-xs">
-          <div class="font-bold text-slate-200">${road.name} (${road.id})</div>
+          <div class="font-bold text-white">${road.name} (${road.id})</div>
           <div>Water Depth: <strong style="color:${roadColor}">${road.current_depth_cm.toFixed(1)} cm</strong></div>
           <div class="text-slate-300">Status: <strong>${road.status}</strong></div>
           <div class="text-cyan-400 text-[10px]">Click for emergency advisory</div>
@@ -358,27 +363,27 @@ export const FloodMap: React.FC<FloodMapProps> = ({
     if (!layers.hotspots || !floodMap) return;
 
     floodMap.hotspots.forEach((hs) => {
-      const hsColor = hs.severity === 'CRITICAL' ? '#ef4444' : hs.severity === 'FLOOD_RISK' ? '#f97316' : '#eab308';
+      const hsColor = hs.severity === 'CRITICAL' ? '#dc2626' : hs.severity === 'FLOOD_RISK' ? '#ea580c' : '#d97706';
 
       L.circle([hs.lat, hs.lng], {
         radius: 140,
         color: hsColor,
-        weight: 1,
+        weight: 1.5,
         fillColor: hsColor,
-        fillOpacity: 0.25,
+        fillOpacity: 0.28,
       }).addTo(lg.hotspots);
 
       const marker = L.circleMarker([hs.lat, hs.lng], {
-        radius: 7,
+        radius: 7.5,
         color: '#ffffff',
-        weight: 1.5,
+        weight: 2,
         fillColor: hsColor,
         fillOpacity: 1.0,
       });
 
       marker.bindTooltip(
         `<div class="space-y-1 text-slate-100 text-xs">
-          <div class="font-bold text-slate-200">HOTSPOT: ${hs.name}</div>
+          <div class="font-bold text-white">HOTSPOT: ${hs.name}</div>
           <div>Water Depth: <span style="color:${hsColor}; font-weight:700">${hs.water_depth_cm} cm</span></div>
           <div class="text-slate-300 text-[10px]">${hs.description}</div>
         </div>`,
@@ -398,9 +403,9 @@ export const FloodMap: React.FC<FloodMapProps> = ({
 
     if (routeResult.normal_route && routeResult.normal_route.polyline.length > 0) {
       L.polyline(routeResult.normal_route.polyline, {
-        color: '#ef4444',
+        color: '#dc2626',
         weight: 5,
-        opacity: 0.7,
+        opacity: 0.75,
         dashArray: '6, 6',
       }).addTo(lg.routes);
     }
@@ -409,12 +414,12 @@ export const FloodMap: React.FC<FloodMapProps> = ({
       L.polyline(routeResult.safe_route.polyline, {
         color: '#0284c7',
         weight: 7,
-        opacity: 0.4,
+        opacity: 0.45,
       }).addTo(lg.routes);
 
       L.polyline(routeResult.safe_route.polyline, {
-        color: '#38bdf8',
-        weight: 3.5,
+        color: '#0284c7',
+        weight: 4,
         opacity: 1.0,
       }).addTo(lg.routes);
 
@@ -422,18 +427,18 @@ export const FloodMap: React.FC<FloodMapProps> = ({
       const endCoord = routeResult.safe_route.polyline[routeResult.safe_route.polyline.length - 1];
 
       L.circleMarker(startCoord, {
-        radius: 6,
+        radius: 6.5,
         color: '#ffffff',
         weight: 2,
-        fillColor: '#10b981',
+        fillColor: '#059669',
         fillOpacity: 1.0,
       }).bindTooltip('<strong>Route Origin</strong>', { permanent: false }).addTo(lg.routes);
 
       L.circleMarker(endCoord, {
-        radius: 6,
+        radius: 6.5,
         color: '#ffffff',
         weight: 2,
-        fillColor: '#ef4444',
+        fillColor: '#dc2626',
         fillOpacity: 1.0,
       }).bindTooltip('<strong>Route Destination</strong>', { permanent: false }).addTo(lg.routes);
     }

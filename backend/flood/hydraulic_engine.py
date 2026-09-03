@@ -67,8 +67,8 @@ class HydraulicFloodEngine:
         logit = (depth_cm - 12.0) / 6.0
         prob = 1.0 / (1.0 + math.exp(-logit))
         
-        # Real Delhi elevation baseline ~205m-230m MSL
-        lowland_factor = max(0.0, (216.0 - elev_m) / 15.0) * 0.15
+        # Real South Jaipur elevation baseline ~354m-438m MSL
+        lowland_factor = max(0.0, (380.0 - elev_m) / 20.0) * 0.15
         imp_factor = imp * 0.12
         
         return float(np.clip(prob + lowland_factor + imp_factor, 0.05, 0.99))
@@ -113,10 +113,27 @@ class HydraulicFloodEngine:
         )
         drain_node_map = {dn.id: dn for dn in drain_nodes}
 
-        # 4. Compute 2D Surface Water Mass Balance with real terrain slope & depression
-        raw_depth_cm = (cum_grid / 10.0) * runoff_coeffs * 0.45 + initial_ponding_cm
-        elev_depression_factor = np.clip((216.0 - self.elevation) / 8.0, 0.0, 3.5)
-        
+        # 4. Compute 2D Surface Water Inundation using Pre-Trained XGBoost Surrogate + Depression Hydraulics
+        from ..ml.xgboost_model import ml_surrogate
+
+        rain_eff_mm = np.maximum(cum_grid, intensity_grid * 0.40) * rainfall_multiplier
+        features_array = np.column_stack([
+            self.elevation.flatten(),
+            self.slope.flatten(),
+            self.city.log_flow_accum.flatten(),
+            self.imperviousness.flatten(),
+            self.city.drainage_capacity_estimated.flatten(),
+            rain_eff_mm.flatten()
+        ])
+
+        try:
+            ml_raw_preds = ml_surrogate.predict_vectorized(features_array).reshape(self.grid_size, self.grid_size)
+            ml_raw_preds = np.clip(ml_raw_preds, 0.0, None)
+        except Exception:
+            ml_raw_preds = (rain_eff_mm / 10.0) * runoff_coeffs * 0.45
+
+        elev_depression_factor = np.clip((385.0 - self.elevation) / 12.0, 0.0, 3.5)
+
         surcharge_grid_cm = np.zeros((self.grid_size, self.grid_size))
         for dn in drain_nodes:
             if dn.is_surcharged and dn.overflow_depth_cm > 0:
@@ -128,11 +145,26 @@ class HydraulicFloodEngine:
                             wt = 1.0 if (dr == 0 and dc == 0) else 0.4
                             surcharge_grid_cm[nr, nc] += dn.overflow_depth_cm * wt
 
-        water_depth_2d = raw_depth_cm * (1.0 + 0.65 * elev_depression_factor) + surcharge_grid_cm
+        # Blend ML surrogate prediction with local topographic depression amplification & drainage surcharge
+        water_depth_2d = ml_raw_preds * (1.0 + 1.2 * elev_depression_factor) + surcharge_grid_cm + initial_ponding_cm
         water_depth_2d = np.clip(water_depth_2d, 0.0, 130.0)
 
         max_rain_intensity, max_cum_rain = rainfall_nowcaster.get_rainfall_grid_2d(120, rainfall_multiplier)
-        pred_max_depth_2d = (max_cum_rain / 10.0) * runoff_coeffs * 0.60 * (1.0 + 0.85 * elev_depression_factor) + surcharge_grid_cm * 1.4
+        pred_features_array = np.column_stack([
+            self.elevation.flatten(),
+            self.slope.flatten(),
+            self.city.log_flow_accum.flatten(),
+            self.imperviousness.flatten(),
+            self.city.drainage_capacity_estimated.flatten(),
+            max_cum_rain.flatten() * rainfall_multiplier
+        ])
+        try:
+            pred_ml_preds = ml_surrogate.predict_vectorized(pred_features_array).reshape(self.grid_size, self.grid_size)
+            pred_ml_preds = np.clip(pred_ml_preds, 0.0, None)
+        except Exception:
+            pred_ml_preds = (max_cum_rain / 10.0) * runoff_coeffs * 0.60
+
+        pred_max_depth_2d = pred_ml_preds * (1.0 + 1.4 * elev_depression_factor) + surcharge_grid_cm * 1.4
         pred_max_depth_2d = np.clip(np.maximum(water_depth_2d, pred_max_depth_2d), 0.0, 150.0)
 
         flood_cells: List[FloodCellSchema] = []
@@ -194,7 +226,7 @@ class HydraulicFloodEngine:
 
             if road_depth < 5.0:
                 status = RoadStatusEnum.OPEN
-                rec_action = "Normal traffic flow across Delhi corridor. Monitor weather radar."
+                rec_action = "Normal traffic flow across South Jaipur corridor. Monitor weather radar."
             elif road_depth < 15.0:
                 status = RoadStatusEnum.CAUTION
                 rec_action = "Speed limit 20 km/h. Low-slung passenger cars proceed with caution."
@@ -230,39 +262,51 @@ class HydraulicFloodEngine:
         hotspots = [
             FloodHotspot(
                 id="HS-01",
-                name="ITO Ring Road Underpass Sump",
-                lat=float(self.lats[20, 14]),
-                lng=float(self.lngs[20, 14]),
-                water_depth_cm=round(float(water_depth_2d[20, 14] * 1.60), 1),
-                severity=self.classify_severity(float(water_depth_2d[20, 14] * 1.60)),
-                flood_probability=round(self.calculate_flood_probability(float(water_depth_2d[20, 14] * 1.60), float(self.elevation[20, 14]), 0.92), 3),
-                description="Sunken grade-separated arterial underpass at ITO receiving heavy surcharge overflow from drain DN-09.",
-                nearest_drain_id="DN-09",
-                drain_utilization_pct=round(drain_node_map["DN-09"].utilization_pct, 1)
+                name="World Trade Park (WTP) Underpass Sump",
+                lat=float(self.lats[8, 8]),
+                lng=float(self.lngs[8, 8]),
+                water_depth_cm=round(float(water_depth_2d[8, 8] * 1.60), 1),
+                severity=self.classify_severity(float(water_depth_2d[8, 8] * 1.60)),
+                flood_probability=round(self.calculate_flood_probability(float(water_depth_2d[8, 8] * 1.60), float(self.elevation[8, 8]), 0.92), 3),
+                description="Sunken grade-separated commercial underpass at WTP / JLN Marg receiving heavy surcharge overflow from drain DN-03.",
+                nearest_drain_id="DN-03",
+                drain_utilization_pct=round(drain_node_map["DN-03"].utilization_pct, 1)
             ),
             FloodHotspot(
                 id="HS-02",
-                name="Tilak Bridge Railway Underpass Lowland",
-                lat=float(self.lats[22, 10]),
-                lng=float(self.lngs[22, 10]),
-                water_depth_cm=round(float(water_depth_2d[22, 10] * 1.50), 1),
-                severity=self.classify_severity(float(water_depth_2d[22, 10] * 1.50)),
-                flood_probability=round(self.calculate_flood_probability(float(water_depth_2d[22, 10] * 1.50), float(self.elevation[22, 10]), 0.88), 3),
-                description="Depressed railway underpass with 88% urban imperviousness and constricted drainage at DN-11.",
-                nearest_drain_id="DN-11",
-                drain_utilization_pct=round(drain_node_map["DN-11"].utilization_pct, 1)
+                name="Jawahar Circle / JLN Marg Junction",
+                lat=float(self.lats[4, 6]),
+                lng=float(self.lngs[4, 6]),
+                water_depth_cm=round(float(water_depth_2d[4, 6] * 1.45), 1),
+                severity=self.classify_severity(float(water_depth_2d[4, 6] * 1.45)),
+                flood_probability=round(self.calculate_flood_probability(float(water_depth_2d[4, 6] * 1.45), float(self.elevation[4, 6]), 0.88), 3),
+                description="Major circular roundabout basin receiving convergent runoff from northern Malviya Nagar.",
+                nearest_drain_id="DN-01",
+                drain_utilization_pct=round(drain_node_map["DN-01"].utilization_pct, 1)
             ),
             FloodHotspot(
                 id="HS-03",
-                name="Bhairon Marg Sunken Basin",
-                lat=float(self.lats[26, 16]),
-                lng=float(self.lngs[26, 16]),
-                water_depth_cm=round(float(water_depth_2d[26, 16] * 1.45), 1),
-                severity=self.classify_severity(float(water_depth_2d[26, 16] * 1.45)),
-                flood_probability=round(self.calculate_flood_probability(float(water_depth_2d[26, 16] * 1.45), float(self.elevation[26, 16]), 0.85), 3),
-                description="Lowland basin near Pragati Maidan and Yamuna floodplain corridor at DN-14.",
-                nearest_drain_id="DN-14",
-                drain_utilization_pct=round(drain_node_map["DN-14"].utilization_pct, 1)
+                name="Jagatpura Railway Flyover Underpass",
+                lat=float(self.lats[24, 24]),
+                lng=float(self.lngs[24, 24]),
+                water_depth_cm=round(float(water_depth_2d[24, 24] * 1.55), 1),
+                severity=self.classify_severity(float(water_depth_2d[24, 24] * 1.55)),
+                flood_probability=round(self.calculate_flood_probability(float(water_depth_2d[24, 24] * 1.55), float(self.elevation[24, 24]), 0.86), 3),
+                description="Constricted railway underpass basin with constricted storm culvert at DN-13.",
+                nearest_drain_id="DN-13",
+                drain_utilization_pct=round(drain_node_map["DN-13"].utilization_pct, 1)
+            ),
+            FloodHotspot(
+                id="HS-04",
+                name="Jaipur Airport Terminal 2 Lowland",
+                lat=float(self.lats[20, 11]),
+                lng=float(self.lngs[20, 11]),
+                water_depth_cm=round(float(water_depth_2d[20, 11] * 1.40), 1),
+                severity=self.classify_severity(float(water_depth_2d[20, 11] * 1.40)),
+                flood_probability=round(self.calculate_flood_probability(float(water_depth_2d[20, 11] * 1.40), float(self.elevation[20, 11]), 0.85), 3),
+                description="Airport entrance corridor and apron drainage receiving overland surcharge during cloudburst events.",
+                nearest_drain_id="DN-10",
+                drain_utilization_pct=round(drain_node_map["DN-10"].utilization_pct, 1)
             )
         ]
 

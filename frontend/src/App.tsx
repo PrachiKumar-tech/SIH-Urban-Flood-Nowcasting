@@ -25,12 +25,23 @@ import { WhatIfModal } from './components/WhatIfModal';
 import { RoutePlanner } from './components/RoutePlanner';
 import { RoadDetailModal } from './components/RoadDetailModal';
 import { DrainageDetailModal } from './components/DrainageDetailModal';
-import { MLComparisonModal } from './components/MLComparisonModal';
+import { ToastContainer, ToastMessage } from './components/Toast';
 import { FloodMap } from './map/FloodMap';
 
 const HORIZONS = [0, 30, 60, 90, 120, 180];
 
 export const App: React.FC = () => {
+  const [toasts, setToasts] = useState<ToastMessage[]>([]);
+
+  const addToast = (title: string, message: string, type: 'success' | 'info' | 'warning' = 'info') => {
+    const id = Date.now().toString();
+    setToasts((prev) => [...prev, { id, title, message, type }]);
+  };
+
+  const removeToast = (id: string) => {
+    setToasts((prev) => prev.filter((t) => t.id !== id));
+  };
+
   const [timeOffsetMin, setTimeOffsetMin] = useState<number>(0);
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
 
@@ -64,7 +75,6 @@ export const App: React.FC = () => {
   });
   const [isLayerControlOpen, setIsLayerControlOpen] = useState<boolean>(false);
   const [isWhatIfOpen, setIsWhatIfOpen] = useState<boolean>(false);
-  const [isMLModalOpen, setIsMLModalOpen] = useState<boolean>(false);
   const [isRoutePlannerOpen, setIsRoutePlannerOpen] = useState<boolean>(false);
   const [selectedRoad, setSelectedRoad] = useState<RoadSegment | null>(null);
   const [selectedDrainNode, setSelectedDrainNode] = useState<DrainageNode | null>(null);
@@ -126,10 +136,27 @@ export const App: React.FC = () => {
     try {
       await runWhatIfSimulation(newParams);
       await loadData(timeOffsetMin, newParams);
+      addToast(
+        'Scenario Applied',
+        `${newParams.custom_scenario} (${newParams.rainfall_multiplier.toFixed(1)}x rain)`,
+        'success'
+      );
     } catch (err) {
       console.error('Failed to apply What-If scenario:', err);
+      addToast('Error', 'Failed to calculate scenario parameters', 'warning');
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleRouteCalculated = (route: RouteResponse | null) => {
+    setRouteResult(route);
+    if (route?.safe_route) {
+      addToast(
+        'Safe Route Generated',
+        `ETA: ${route.safe_route.estimated_time_min.toFixed(1)}m | Bypassed ${route.safe_route.roads_avoided_count} hazards`,
+        'info'
+      );
     }
   };
 
@@ -138,8 +165,8 @@ export const App: React.FC = () => {
   };
 
   return (
-    <div className="flex flex-col h-screen w-screen bg-[#0a101d] text-slate-100 overflow-hidden select-none">
-      {/* 1. Clean Top Header */}
+    <div className="flex flex-col h-screen w-screen bg-[#050608] text-zinc-100 overflow-hidden select-none">
+      {/* 1. Command Center Top Header */}
       <Header
         timeOffsetMin={timeOffsetMin}
         rainfallMultiplier={whatIfParams.rainfall_multiplier}
@@ -150,12 +177,11 @@ export const App: React.FC = () => {
         onToggleLayerControl={() => setIsLayerControlOpen(!isLayerControlOpen)}
         isLayerControlOpen={isLayerControlOpen}
         isRoutingOpen={isRoutePlannerOpen}
-        onOpenModelDetails={() => setIsMLModalOpen(true)}
       />
 
-      {/* 2. Main Full-Screen Map Canvas with Floating Operational Panels */}
+      {/* 2. Operations Console Workspace */}
       <div className="flex-1 relative w-full h-full overflow-hidden">
-        {/* Dominant Map (100% viewport) */}
+        {/* Dominant Leaflet Map Canvas (100% viewport) */}
         <FloodMap
           floodMap={floodMap}
           drainageStatus={drainageStatus}
@@ -167,14 +193,13 @@ export const App: React.FC = () => {
           timeOffsetMin={timeOffsetMin}
         />
 
-        {/* Floating Collapsible Left Risk Sidebar */}
+        {/* Floating Collapsible Left Risk Telemetry Sidebar */}
         <StatsSidebar
           floodMap={floodMap}
           drainageStatus={drainageStatus}
           roadStatus={roadStatus}
           isCollapsed={isSidebarCollapsed}
           onToggleCollapse={toggleSidebar}
-          onOpenModelDetails={() => setIsMLModalOpen(true)}
         />
 
         {/* Floating Layer Control Drawer */}
@@ -191,13 +216,13 @@ export const App: React.FC = () => {
           onClose={() => setIsRoutePlannerOpen(false)}
           roads={roadStatus?.roads || []}
           timeOffsetMin={timeOffsetMin}
-          onRouteCalculated={(r) => setRouteResult(r)}
+          onRouteCalculated={handleRouteCalculated}
         />
 
-        {/* Bottom Floating Docks (Timeline & Collapsible Analytics) */}
+        {/* Bottom Floating Docks (Timeline Scrubber & Collapsible Analytics) */}
         <div className="absolute bottom-4 left-4 right-4 z-[850] flex flex-col md:flex-row items-end justify-between gap-3 pointer-events-none">
           {/* Left/Center: Timeline Scrubber */}
-          <div className="pointer-events-auto w-full md:max-w-2xl">
+          <div className="pointer-events-auto w-full md:w-auto">
             <TimeSlider
               timeOffsetMin={timeOffsetMin}
               onTimeChange={(t) => setTimeOffsetMin(t)}
@@ -228,11 +253,6 @@ export const App: React.FC = () => {
         isLoading={isLoading}
       />
 
-      <MLComparisonModal
-        isOpen={isMLModalOpen}
-        onClose={() => setIsMLModalOpen(false)}
-      />
-
       <RoadDetailModal
         road={selectedRoad}
         onClose={() => setSelectedRoad(null)}
@@ -242,6 +262,9 @@ export const App: React.FC = () => {
         node={selectedDrainNode}
         onClose={() => setSelectedDrainNode(null)}
       />
+
+      {/* 4. Non-Intrusive Toast Feedback */}
+      <ToastContainer toasts={toasts} onDismiss={removeToast} />
     </div>
   );
 };

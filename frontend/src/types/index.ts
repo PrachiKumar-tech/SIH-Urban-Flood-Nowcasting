@@ -138,6 +138,15 @@ export interface RoadSegment {
   impassable_for_emergency: boolean;
 }
 
+export interface RoadProgressionPoint {
+  time: string;
+  time_min: number;
+  open: number;
+  caution: number;
+  closed: number;
+  total: number;
+}
+
 export interface RoadStatusResponse {
   time_offset_min: number;
   total_roads: number;
@@ -145,6 +154,7 @@ export interface RoadStatusResponse {
   caution_roads: number;
   closed_roads: number;
   roads: RoadSegment[];
+  road_progression?: RoadProgressionPoint[];
 }
 
 export interface RouteStep {

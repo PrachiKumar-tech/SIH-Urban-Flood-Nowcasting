@@ -1,5 +1,5 @@
 import React from 'react';
-import { Sliders, Navigation, Layers, ShieldCheck, Activity } from 'lucide-react';
+import { Sliders, Navigation, Layers, Activity } from 'lucide-react';
 
 interface HeaderProps {
   timeOffsetMin: number;
@@ -11,7 +11,7 @@ interface HeaderProps {
   onToggleLayerControl: () => void;
   isLayerControlOpen: boolean;
   isRoutingOpen: boolean;
-  onOpenModelDetails: () => void;
+  onOpenModelDetails?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -24,93 +24,83 @@ export const Header: React.FC<HeaderProps> = ({
   onToggleLayerControl,
   isLayerControlOpen,
   isRoutingOpen,
-  onOpenModelDetails
 }) => {
   return (
-    <header className="h-14 bg-[#0a101d] border-b border-[#1c2a3e] px-4 flex items-center justify-between z-30 select-none shadow-md">
-      {/* Left: Platform Title & Active Study Area */}
+    <header className="h-13 bg-black/75 backdrop-blur-xl border-b border-white/[0.10] shadow-[0_4px_24px_rgba(0,0,0,0.5)] px-4 flex items-center justify-between z-30 select-none">
+      {/* Left: Platform Title & Study Area */}
       <div className="flex items-center space-x-3">
-        <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center font-black text-white text-sm tracking-wider shadow-sm">
+        <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-sky-500/30 to-indigo-600/40 border border-sky-400/40 flex items-center justify-center font-bold text-sky-200 text-xs tracking-wider shadow-[0_0_12px_rgba(56,189,248,0.25)]">
           HC
         </div>
         <div>
           <div className="flex items-center space-x-2">
-            <h1 className="text-sm font-bold tracking-tight text-white uppercase">
-              HydroCast <span className="text-blue-400">AI</span>
+            <h1 className="text-xs font-bold tracking-wide text-white uppercase">
+              HydroCast <span className="text-sky-400">AI</span>
             </h1>
-            <span className="text-[11px] font-medium text-slate-300 border-l border-slate-700 pl-2">
+            <span className="text-[11px] font-normal text-zinc-400 border-l border-white/[0.12] pl-2">
               Urban Flood Nowcasting System
             </span>
           </div>
-          <p className="text-[11px] text-slate-300 font-medium">
-            Active Study Area &bull; <span className="text-blue-300 font-semibold">Delhi Pilot Catchment</span>
+          <p className="text-[10px] text-zinc-400 font-normal">
+            Active Study Area &bull; <span className="text-zinc-200 font-medium">South Jaipur Catchment (Jawahar Circle • Malviya Nagar)</span>
           </p>
         </div>
       </div>
 
-      {/* Center/Right: Diagnostic Status & Storm Multiplier */}
-      <div className="hidden lg:flex items-center space-x-3 text-xs">
-        <div className="flex items-center space-x-2 px-2.5 py-1 rounded-md bg-[#101928] border border-[#1e2e46] text-slate-200">
-          <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
-          <span className="text-[11px] font-semibold text-slate-200">System Ready</span>
-          <span className="text-slate-500 font-mono text-[10px]">&bull;</span>
-          <span className="text-[11px] text-slate-300">
-            {simulationMode === 'ml_surrogate' ? 'XGBoost ML Surrogate' : 'Flood Simulation + ML'}
+      {/* Center: System Status & Storm Readout */}
+      <div className="hidden md:flex items-center space-x-2.5 text-xs">
+        <div className="flex items-center space-x-2 px-3 py-1 rounded-lg bg-white/[0.04] border border-white/[0.08] text-zinc-300 backdrop-blur-md">
+          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.6)]"></span>
+          <span className="text-[11px] font-semibold text-white">System Ready</span>
+          <span className="text-zinc-600 font-mono text-[10px]">&bull;</span>
+          <span className="text-[11px] text-zinc-400 font-normal">
+            {simulationMode === 'ml_surrogate' ? 'XGBoost ML Surrogate Active' : 'Coupled Hydrodynamic + ML'}
           </span>
         </div>
 
         {rainfallMultiplier > 1.0 && (
-          <div className="px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40 text-[11px] font-mono font-semibold flex items-center gap-1">
-            <Activity className="w-3 h-3 text-amber-400" />
-            <span>{rainfallMultiplier.toFixed(1)}&times; Storm Intensity</span>
+          <div className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-amber-500/15 text-amber-300 border border-amber-500/35 text-[11px] font-mono font-medium backdrop-blur-md shadow-[0_0_12px_rgba(245,158,11,0.2)]">
+            <Activity className="w-3.5 h-3.5 text-amber-400" />
+            <span>{rainfallMultiplier.toFixed(1)}&times; Storm Deluge</span>
           </div>
         )}
       </div>
 
-      {/* Right: Operational Actions */}
+      {/* Right: Operational Action Controls */}
       <div className="flex items-center space-x-2">
         <button
           onClick={onOpenScenarioModal}
-          className="flex items-center space-x-1.5 bg-[#142236] hover:bg-[#1a2c47] text-slate-100 hover:text-white text-xs font-semibold px-3 py-1.5 rounded-lg border border-[#23354e] transition active:scale-95 cursor-pointer"
+          className="flex items-center space-x-1.5 glass-btn text-xs font-medium px-3 py-1.5 rounded-lg transition cursor-pointer"
           title="Run scenario simulations and adjust weather/drainage parameters"
         >
-          <Sliders className="w-3.5 h-3.5 text-blue-400" />
-          <span>Run Scenario</span>
+          <Sliders className="w-3.5 h-3.5 text-sky-400" />
+          <span className="hidden sm:inline">Run Scenario</span>
         </button>
 
         <button
           onClick={onOpenRoutePlanner}
-          className={`flex items-center space-x-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg transition active:scale-95 cursor-pointer border ${
+          className={`flex items-center space-x-1.5 text-xs font-medium px-3 py-1.5 rounded-lg transition cursor-pointer ${
             isRoutingOpen
-              ? 'bg-blue-600 text-white border-blue-500 shadow-sm'
-              : 'bg-[#142236] hover:bg-[#1a2c47] text-slate-100 hover:text-white border-[#23354e]'
+              ? 'glass-btn-active font-semibold'
+              : 'glass-btn'
           }`}
           title="Plan flood-safe route for emergency vehicles and commuters"
         >
-          <Navigation className="w-3.5 h-3.5 text-cyan-400" />
-          <span>Safe Route</span>
+          <Navigation className="w-3.5 h-3.5 text-sky-400" />
+          <span className="hidden sm:inline">Safe Route</span>
         </button>
 
         <button
           onClick={onToggleLayerControl}
-          className={`flex items-center space-x-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg transition active:scale-95 cursor-pointer border ${
+          className={`flex items-center space-x-1.5 text-xs font-medium px-3 py-1.5 rounded-lg transition cursor-pointer ${
             isLayerControlOpen
-              ? 'bg-slate-700 text-white border-slate-600'
-              : 'bg-[#142236] hover:bg-[#1a2c47] text-slate-100 hover:text-white border-[#23354e]'
+              ? 'glass-btn-active font-semibold'
+              : 'glass-btn'
           }`}
           title="Toggle map GIS layers"
         >
-          <Layers className="w-3.5 h-3.5 text-slate-300" />
-          <span>Layers</span>
-        </button>
-
-        <button
-          onClick={onOpenModelDetails}
-          className="flex items-center space-x-1.5 px-2.5 py-1.5 rounded-lg bg-[#142236] hover:bg-[#1a2c47] text-slate-300 hover:text-white border border-[#23354e] transition cursor-pointer text-xs font-medium"
-          title="Model Details & System Architecture"
-        >
-          <ShieldCheck className="w-3.5 h-3.5 text-purple-400" />
-          <span className="hidden sm:inline">Model Info</span>
+          <Layers className="w-3.5 h-3.5 text-zinc-300" />
+          <span className="hidden sm:inline">Layers</span>
         </button>
       </div>
     </header>

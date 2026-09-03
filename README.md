@@ -98,10 +98,7 @@ Dashboard will be available at: `http://127.0.0.1:5173/`
 ```bash
 python -m pytest -v backend/tests/
 ```
-### One Liner
-```bash
-npm start
-```
+
 ---
 
 ## 🧪 6. Demonstration Scenarios

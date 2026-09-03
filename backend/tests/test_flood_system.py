@@ -75,11 +75,11 @@ def test_pretrained_ml_surrogate_inference():
     assert "feature_importances" in info
     assert "imperviousness" in info["feature_importances"]
     
-    # 7-feature sample vector
-    # ['elevation', 'slope_deg', 'flow_accum', 'imperviousness', 'real_drain', 'drainage_capacity_estimated', 'rainfall_mm']
+    # 6-feature sample vector for Jaipur model
+    # ['elevation', 'slope_deg', 'flow_accum', 'imperviousness', 'drainage_capacity_estimated', 'rainfall_mm']
     sample_features = np.array([
-        [210.0, 1.2, 4.5, 1.0, 1.0, 50.0, 100.0],
-        [225.0, 5.8, 1.1, 0.0, 0.0, 5.0, 20.0]
+        [365.0, 1.2, 4.5, 1.0, 50.0, 100.0],
+        [415.0, 5.8, 1.1, 0.0, 5.0, 20.0]
     ])
     preds = ml_surrogate.predict_vectorized(sample_features)
     assert len(preds) == 2

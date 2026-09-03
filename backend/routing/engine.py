@@ -44,6 +44,34 @@ class FloodAwareRoutingEngine:
                 nearby_drain_id=road["nearby_drain_id"]
             )
 
+        # Ensure network connectivity across city sectors
+        nodes_dict = {n[0]: (n[2], n[3]) for n in self.city.road_nodes}
+        while nx.number_connected_components(self.base_graph) > 1:
+            comps = list(nx.connected_components(self.base_graph))
+            c1, c2 = comps[0], comps[1]
+            best_dist = float("inf")
+            best_pair = None
+            for n1 in c1:
+                for n2 in c2:
+                    la1, lo1 = nodes_dict[n1]
+                    la2, lo2 = nodes_dict[n2]
+                    d = ((la1 - la2) * 111320) ** 2 + ((lo1 - lo2) * 99348) ** 2
+                    if d < best_dist:
+                        best_dist = d
+                        best_pair = (n1, n2)
+            if best_pair:
+                self.base_graph.add_edge(
+                    best_pair[0],
+                    best_pair[1],
+                    id=f"CONN-{best_pair[0]}-{best_pair[1]}",
+                    name="Arterial Sector Link",
+                    category="arterial",
+                    length_m=round(best_dist ** 0.5, 1),
+                    elevation_m=378.0,
+                    coordinates=[[nodes_dict[best_pair[0]][0], nodes_dict[best_pair[0]][1]], [nodes_dict[best_pair[1]][0], nodes_dict[best_pair[1]][1]]],
+                    nearby_drain_id="DN-01"
+                )
+
     def _find_nearest_node(self, lat: float, lng: float) -> str:
         best_node = None
         best_dist = float("inf")
@@ -95,11 +123,11 @@ class FloodAwareRoutingEngine:
 
             g_normal.add_edge(u, v, weight=length_m, **d)
 
+            depth_penalty = (depth_cm / 5.0) ** 3 * (4.0 if is_emergency else 2.5)
             if depth_cm >= closure_depth:
-                safe_weight = length_m * 1000.0 + 50000.0
+                safe_weight = length_m * (100.0 + depth_penalty) + depth_cm * 10000.0
             else:
-                penalty_factor = (depth_cm / 10.0) ** 2 * (3.5 if is_emergency else 2.0)
-                safe_weight = length_m * (1.0 + penalty_factor + prob * 2.0)
+                safe_weight = length_m * (1.0 + depth_penalty + prob * 2.0)
 
             g_safe.add_edge(u, v, weight=safe_weight, **d)
 

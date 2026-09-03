@@ -6,18 +6,27 @@ from ..data.city_generator import synthetic_city
 class RainfallNowcaster:
     """
     Spatial-temporal convective storm nowcast engine (0 to 180 min).
-    Models a moving high-intensity storm cell across the Delhi Yamuna catchment
+    Models a moving high-intensity storm cell across the South Jaipur catchment
     with Gaussian spatial dispersion and user-configurable intensity multipliers.
     """
 
     HORIZONS = [0, 30, 60, 90, 120, 180]
     BASE_INTENSITIES = {
-        0: 20.0,
-        30: 35.0,
-        60: 55.0,
-        90: 75.0,
-        120: 90.0,
-        180: 65.0,
+        0: 45.0,
+        30: 65.0,
+        60: 85.0,
+        90: 102.6,
+        120: 75.0,
+        180: 35.0,
+    }
+
+    CUMULATIVE_SCHEDULE = {
+        0: 45.0,
+        30: 65.0,
+        60: 85.0,
+        90: 102.6,
+        120: 110.0,
+        180: 95.0
     }
 
     def __init__(self, city_data=synthetic_city):
@@ -61,8 +70,23 @@ class RainfallNowcaster:
         intensity_grid = base_rain * spatial_factor * multiplier
         intensity_grid = np.clip(intensity_grid, 0.0, 250.0)
 
-        cum_factor = (time_offset_min / 60.0) * (base_rain * 0.65) * multiplier
-        cumulative_grid = np.clip(cum_factor * spatial_factor, 0.0, 350.0)
+        # Active cloudburst storm cumulative accumulation (matching plots.ipynb August 1 event)
+        if int(t) in self.CUMULATIVE_SCHEDULE:
+            cum_base = self.CUMULATIVE_SCHEDULE[int(t)]
+        else:
+            h_keys = sorted(self.CUMULATIVE_SCHEDULE.keys())
+            if t <= h_keys[0]:
+                cum_base = self.CUMULATIVE_SCHEDULE[h_keys[0]]
+            elif t >= h_keys[-1]:
+                cum_base = self.CUMULATIVE_SCHEDULE[h_keys[-1]]
+            else:
+                for i in range(len(h_keys) - 1):
+                    if h_keys[i] <= t <= h_keys[i+1]:
+                        frac = (t - h_keys[i]) / (h_keys[i+1] - h_keys[i])
+                        cum_base = (1 - frac) * self.CUMULATIVE_SCHEDULE[h_keys[i]] + frac * self.CUMULATIVE_SCHEDULE[h_keys[i+1]]
+                        break
+
+        cumulative_grid = np.clip(cum_base * spatial_factor * multiplier, 0.0, 350.0)
 
         return intensity_grid, cumulative_grid
 
@@ -93,7 +117,7 @@ class RainfallNowcaster:
             ))
 
         return RainfallNowcastResponse(
-            scenario_name="Delhi Monsoon Cloudburst Scenario",
+            scenario_name="South Jaipur Monsoon Cloudburst Scenario",
             current_time_offset_min=current_time_min,
             multiplier=multiplier,
             forecast_steps=forecast_steps

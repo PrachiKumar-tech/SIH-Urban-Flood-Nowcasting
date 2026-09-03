@@ -18,7 +18,7 @@ def get_health():
         "status": "healthy",
         "system": "Urban Flood Nowcasting System (Drainage & Rainfall Coupling)",
         "version": "2.0.0-SIH2026",
-        "catchment": "Active Study Area • Delhi Pilot Catchment",
+        "catchment": "Active Study Area • South Jaipur (Jawahar Circle & Malviya Nagar Catchment)",
         "grid_resolution_m": round(synthetic_city.cell_size_m, 1),
         "total_roads": len(synthetic_city.road_segments),
         "total_drain_nodes": len(synthetic_city.drainage_nodes),

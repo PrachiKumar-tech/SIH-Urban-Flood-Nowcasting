@@ -170,6 +170,7 @@ class RoadStatusResponse(BaseModel):
     caution_roads: int
     closed_roads: int
     roads: List[RoadSegmentSchema]
+    road_progression: Optional[List[Dict[str, Any]]] = None
 
 
 class RouteStep(BaseModel):
