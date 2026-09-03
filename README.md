@@ -78,25 +78,9 @@ Dynamic Flood-Aware Routing Engine (Normal vs Emergency Detours)
 - Python 3.10+
 - Node.js 18+ and npm
 
-### Backend Setup
-```bash
-cd backend
-python -m pip install -r requirements.txt
-python -m uvicorn backend.main:app --host 127.0.0.1 --port 8000 --reload
+### One line command (run it in the root project folder)
 ```
-API Documentation will be available at: `http://127.0.0.1:8000/docs`
-
-### Frontend Setup
-```bash
-cd frontend
-npm install
-npm run dev
-```
-Dashboard will be available at: `http://127.0.0.1:5173/`
-
-### Running Backend Tests
-```bash
-python -m pytest -v backend/tests/
+npm start
 ```
 
 ---
