@@ -67,20 +67,62 @@ Dynamic Flood-Aware Routing Engine (Normal vs Emergency Detours)
 ## 🛠️ 4. Tech Stack
 
 - **Backend**: Python 3.14, FastAPI, Pydantic v2, NumPy, Pandas, Scipy, NetworkX, XGBoost, Scikit-learn, Pytest, HTTPX, Uvicorn.
-- **Frontend**: React 19, TypeScript, Vite, Tailwind CSS v4, Leaflet, Recharts, Lucide React.
-- **Data Model**: Deterministic 5 km × 5 km synthetic metropolitan catchment (*"Indraprastha Catchment / Ward 14"*), 30 × 30 grid (~166m resolution), 33 road segments, 21 drainage nodes, 24 pipes, 3 critical flood sinks.
+- **Frontend**: React 19, TypeScript, Vite, Tailwind CSS v4 (Black Glass Edition), Leaflet, Recharts, Lucide React.
+- **Data Model**: Real South Jaipur Pilot Catchment (Jawahar Circle, WTP, Airport, Malviya Nagar & Jagatpura), 36 × 36 grid (~138m resolution), 28 real OpenStreetMap arterial corridors, 21 drainage sumps, 24 trunk pipes.
 
 ---
 
-## 📦 5. Installation & Setup
+## 📦 5. Installation & Setup (For Any Machine)
 
 ### Prerequisites
-- Python 3.10+
-- Node.js 18+ and npm
+- **Python 3.10+** (Ensure `python` and `pip` are added to your system PATH)
+- **Node.js 18+** and `npm`
 
-### One line command (run it in the root project folder)
+---
+
+### Method A: One-Click Startup (Recommended for Windows)
+Simply double-click:
+1. **`setup.bat`** (Run once to install all Python & Node dependencies).
+2. **`start.bat`** (Launches both the FastAPI backend and React frontend in separate windows and opens your browser).
+
+---
+
+### Method B: Manual CLI Setup (Windows / Mac / Linux)
+
+#### 1. Install Backend Dependencies
+From the repository root:
+```bash
+pip install -r backend/requirements.txt
 ```
-npm start
+
+#### 2. Install Frontend Dependencies
+From the repository root:
+```bash
+cd frontend
+npm install
+cd ..
+```
+
+#### 3. Run the Python Backend Server (Port 8000)
+From the repository root directory:
+```bash
+python -m uvicorn backend.main:app --host 127.0.0.1 --port 8000 --reload
+```
+> **Note**: Interactive OpenAPI Docs will be available at: `http://127.0.0.1:8000/docs`
+
+#### 4. Run the React Frontend (Port 5173)
+In a **second terminal window**, from the `frontend/` directory:
+```bash
+cd frontend
+npm run dev
+```
+> **Note**: The dashboard will open at: `http://localhost:5173/`
+
+---
+
+### Running Automated Test Suite
+```bash
+python -m pytest -v backend/tests/
 ```
 
 ---

@@ -1,3 +1,11 @@
+import sys
+import os
+
+# Ensure the repository root directory is in sys.path regardless of execution CWD
+_repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if _repo_root not in sys.path:
+    sys.path.insert(0, _repo_root)
+
 import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware

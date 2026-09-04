@@ -79,6 +79,8 @@ export const App: React.FC = () => {
   const [selectedRoad, setSelectedRoad] = useState<RoadSegment | null>(null);
   const [selectedDrainNode, setSelectedDrainNode] = useState<DrainageNode | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [isBackendConnected, setIsBackendConnected] = useState<boolean>(true);
+  const [backendErrorMessage, setBackendErrorMessage] = useState<string | null>(null);
 
   const toggleSidebar = () => {
     setIsSidebarCollapsed((prev) => {
@@ -101,8 +103,20 @@ export const App: React.FC = () => {
       setDrainageStatus(ds);
       setRoadStatus(rs);
       setRainfallData(rf);
-    } catch (err) {
-      console.error('Failed to fetch simulation data:', err);
+      setIsBackendConnected(true);
+      setBackendErrorMessage(null);
+    } catch (err: any) {
+      console.error(
+        '[HydroCast AI Error] Unable to connect to Python FastAPI backend at http://127.0.0.1:8000.\n' +
+        'Please ensure the backend is running:\n' +
+        '  python -m uvicorn backend.main:app --host 127.0.0.1 --port 8000\n' +
+        'Error details:',
+        err
+      );
+      setIsBackendConnected(false);
+      setBackendErrorMessage(
+        'Python FastAPI backend is offline at http://127.0.0.1:8000. Start it with: python -m uvicorn backend.main:app --port 8000'
+      );
     } finally {
       setIsLoading(false);
     }
@@ -172,6 +186,7 @@ export const App: React.FC = () => {
         rainfallMultiplier={whatIfParams.rainfall_multiplier}
         simulationMode={whatIfParams.use_ml_surrogate ? 'ml_surrogate' : 'physical'}
         isLoading={isLoading}
+        isBackendConnected={isBackendConnected}
         onOpenScenarioModal={() => setIsWhatIfOpen(true)}
         onOpenRoutePlanner={() => setIsRoutePlannerOpen(!isRoutePlannerOpen)}
         onToggleLayerControl={() => setIsLayerControlOpen(!isLayerControlOpen)}
@@ -181,6 +196,29 @@ export const App: React.FC = () => {
 
       {/* 2. Operations Console Workspace */}
       <div className="flex-1 relative w-full h-full overflow-hidden">
+        {/* Backend Offline Warning Banner */}
+        {!isBackendConnected && (
+          <div className="absolute top-3 left-1/2 -translate-x-1/2 z-[1500] max-w-2xl w-[92%] bg-rose-950/90 border border-rose-500/50 backdrop-blur-xl px-4 py-3 rounded-xl shadow-2xl flex items-center justify-between gap-3 text-xs text-rose-100 animate-in fade-in">
+            <div className="flex items-center gap-2.5">
+              <span className="w-2.5 h-2.5 rounded-full bg-rose-400 animate-ping shrink-0" />
+              <div>
+                <strong className="text-white font-semibold">FastAPI Backend Offline (Port 8000 Unreachable):</strong>
+                <p className="text-[11px] text-rose-200 mt-0.5">
+                  The Python simulation service is not running, so live Jaipur flood data cannot load.
+                  Start it in a terminal using:
+                  <code className="ml-1.5 px-2 py-0.5 bg-black/60 rounded text-sky-300 font-mono font-semibold">python -m uvicorn backend.main:app --port 8000</code>
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={() => loadData(timeOffsetMin, whatIfParams)}
+              className="px-3 py-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded-lg font-medium text-xs transition shrink-0 cursor-pointer shadow-md"
+            >
+              Retry
+            </button>
+          </div>
+        )}
+
         {/* Dominant Leaflet Map Canvas (100% viewport) */}
         <FloodMap
           floodMap={floodMap}

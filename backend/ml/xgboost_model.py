@@ -37,46 +37,55 @@ class PreTrainedFloodXGBoostSurrogate:
         ]
         self.model: Optional[xgb.XGBRegressor] = None
         self.metrics: Dict[str, Any] = {}
+        self.model_loaded = False
         self.feature_importances: Dict[str, float] = {}
         self._load_and_initialize()
 
     def _load_and_initialize(self):
         """Loads the pre-trained model.pkl from disk and configures verified metrics."""
         if os.path.exists(self.model_path):
-            with open(self.model_path, "rb") as f:
-                self.model = pickle.load(f)
-            
-            if hasattr(self.model, "feature_names_in_"):
-                self.feature_names = list(self.model.feature_names_in_)
-            else:
-                self.feature_names = [
-                    "elevation",
-                    "slope_deg",
-                    "flow_accum",
-                    "imperviousness",
-                    "drainage_capacity_estimated",
-                    "rainfall_mm"
-                ]
-            
-            # Extract true feature importances from the loaded XGBoost model
-            fi = self.model.feature_importances_
-            self.feature_importances = {name: round(float(val), 4) for name, val in zip(self.feature_names, fi)}
-            
-            self.metrics = {
-                "model_type": "XGBoost Regressor (Pre-Trained on Real NASA SRTM & OSM Data)",
-                "training_samples": 214617,
-                "test_samples": 53655,
-                "training_duration_ms": 1420.5,
-                "mae_cm": 0.795,
-                "rmse_cm": 1.055,
-                "r2_score": 0.632,
-                "feature_importances": self.feature_importances,
-                "inference_latency_ms": 0.38,
-                "physical_solver_latency_ms": 14.5,
-                "speedup_factor": "38.2x",
-                "study_area": "South Jaipur (Jawahar Circle, Malviya Nagar & Sanganer Catchment)"
-            }
+            try:
+                with open(self.model_path, "rb") as f:
+                    self.model = pickle.load(f)
+                
+                if hasattr(self.model, "feature_names_in_"):
+                    self.feature_names = list(self.model.feature_names_in_)
+                else:
+                    self.feature_names = [
+                        "elevation",
+                        "slope_deg",
+                        "flow_accum",
+                        "imperviousness",
+                        "drainage_capacity_estimated",
+                        "rainfall_mm"
+                    ]
+                
+                # Extract true feature importances from the loaded XGBoost model
+                fi = self.model.feature_importances_
+                self.feature_importances = {name: round(float(val), 4) for name, val in zip(self.feature_names, fi)}
+                
+                self.metrics = {
+                    "model_type": "XGBoost Regressor (Pre-Trained on Real NASA SRTM & OSM Data)",
+                    "training_samples": 214617,
+                    "test_samples": 53655,
+                    "training_duration_ms": 1420.5,
+                    "mae_cm": 0.795,
+                    "rmse_cm": 1.055,
+                    "r2_score": 0.632,
+                    "feature_importances": self.feature_importances,
+                    "inference_latency_ms": 0.38,
+                    "physical_solver_latency_ms": 14.5,
+                    "speedup_factor": "38.2x",
+                    "study_area": "South Jaipur (Jawahar Circle, Malviya Nagar & Sanganer Catchment)"
+                }
+                self.model_loaded = True
+                print(f"[HydroCast AI] Successfully loaded pre-trained XGBoost model: {self.model_path}")
+            except Exception as e:
+                print(f"[CRITICAL ERROR] Failed to unpickle model {self.model_path}: {e}")
+                self._train_fallback_model()
         else:
+            print(f"[CRITICAL WARNING] Pre-trained model.pkl NOT found at {self.model_path}!")
+            print("[HydroCast AI] Training fallback surrogate model from local topographic layers...")
             # Fallback inline training if pickle not found
             self._train_fallback_model()
 

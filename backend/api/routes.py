@@ -16,12 +16,18 @@ router = APIRouter(prefix="/api")
 def get_health():
     return {
         "status": "healthy",
+        "backend_online": True,
         "system": "Urban Flood Nowcasting System (Drainage & Rainfall Coupling)",
         "version": "2.0.0-SIH2026",
         "catchment": "Active Study Area • South Jaipur (Jawahar Circle & Malviya Nagar Catchment)",
         "grid_resolution_m": round(synthetic_city.cell_size_m, 1),
         "total_roads": len(synthetic_city.road_segments),
         "total_drain_nodes": len(synthetic_city.drainage_nodes),
+        "dem_loaded": getattr(synthetic_city, "dem_loaded", False),
+        "imperviousness_loaded": getattr(synthetic_city, "imp_loaded", False),
+        "roads_loaded": getattr(synthetic_city, "roads_loaded", False),
+        "ml_model_loaded": getattr(ml_surrogate, "model_loaded", False),
+        "data_load_errors": getattr(synthetic_city, "data_load_errors", []),
         "ml_acceleration": "Pre-Trained XGBoost Surrogate (NASA SRTM & OSM Real Data Active)"
     }
 

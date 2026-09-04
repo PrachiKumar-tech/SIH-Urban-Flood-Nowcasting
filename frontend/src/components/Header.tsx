@@ -6,6 +6,7 @@ interface HeaderProps {
   rainfallMultiplier: number;
   simulationMode: 'physical' | 'ml_surrogate';
   isLoading: boolean;
+  isBackendConnected?: boolean;
   onOpenScenarioModal: () => void;
   onOpenRoutePlanner: () => void;
   onToggleLayerControl: () => void;
@@ -19,6 +20,7 @@ export const Header: React.FC<HeaderProps> = ({
   rainfallMultiplier,
   simulationMode,
   isLoading,
+  isBackendConnected = true,
   onOpenScenarioModal,
   onOpenRoutePlanner,
   onToggleLayerControl,
@@ -49,12 +51,24 @@ export const Header: React.FC<HeaderProps> = ({
 
       {/* Center: System Status & Storm Readout */}
       <div className="hidden md:flex items-center space-x-2.5 text-xs">
-        <div className="flex items-center space-x-2 px-3 py-1 rounded-lg bg-white/[0.04] border border-white/[0.08] text-zinc-300 backdrop-blur-md">
-          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.6)]"></span>
-          <span className="text-[11px] font-semibold text-white">System Ready</span>
+        <div className={`flex items-center space-x-2 px-3 py-1 rounded-lg border backdrop-blur-md transition-colors ${
+          isBackendConnected 
+            ? 'bg-white/[0.04] border-white/[0.08] text-zinc-300' 
+            : 'bg-rose-500/20 border-rose-500/40 text-rose-200 shadow-[0_0_12px_rgba(244,63,94,0.3)]'
+        }`}>
+          <span className={`w-2 h-2 rounded-full ${
+            isBackendConnected 
+              ? 'bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.6)]' 
+              : 'bg-rose-400 animate-pulse'
+          }`}></span>
+          <span className="text-[11px] font-semibold text-white">
+            {isBackendConnected ? 'Backend Connected' : 'Backend Offline'}
+          </span>
           <span className="text-zinc-600 font-mono text-[10px]">&bull;</span>
           <span className="text-[11px] text-zinc-400 font-normal">
-            {simulationMode === 'ml_surrogate' ? 'XGBoost ML Surrogate Active' : 'Coupled Hydrodynamic + ML'}
+            {isBackendConnected 
+              ? (simulationMode === 'ml_surrogate' ? 'XGBoost ML Surrogate Active' : 'Coupled Hydrodynamic + ML')
+              : 'Port 8000 Unreachable'}
           </span>
         </div>
 

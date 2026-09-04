@@ -1,1 +1,34 @@
-/SIH_Project
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.pytest_cache/
+env/
+venv/
+.venv/
+*.egg-info/
+.coverage
+htmlcov/
+
+# Node & Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/dist-ssr/
+frontend/*.local
+node_modules/
+dist/
+
+# OS & IDE
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# CRITICAL: DO NOT IGNORE JAIPUR REAL DATASETS OR MODEL FILES
+!backend/sih_project_Data/model.pkl
+!backend/sih_project_Data/*.tif
+!backend/sih_project_Data/*.ipynb
+!backend/data/*.json

@@ -39,6 +39,11 @@ class RealCityDataLoader:
         self.cell_size_m = 138.0  # ~138 meters per grid cell
         self.cell_area_m2 = self.cell_size_m ** 2
         
+        self.dem_loaded = False
+        self.imp_loaded = False
+        self.roads_loaded = False
+        self.data_load_errors = []
+        
         self.rng = np.random.RandomState(RANDOM_SEED)
         self._load_and_process_real_data()
 
@@ -54,22 +59,42 @@ class RealCityDataLoader:
 
         # 1. Ingest Real DEM and Imperviousness Rasters
         if dem_path and os.path.exists(dem_path) and os.path.exists(imp_path):
-            with tifffile.TiffFile(dem_path) as tif:
-                page = tif.pages[0]
-                raw_dem = page.asarray().astype(float)
-                # Parse exact GeoTIFF tiepoint and pixel scale tags if present
-                if "ModelTiepointTag" in page.tags and "ModelPixelScaleTag" in page.tags:
-                    tiepoint = page.tags["ModelTiepointTag"].value
-                    scale = page.tags["ModelPixelScaleTag"].value
-                    raw_h, raw_w = raw_dem.shape
-                    self.min_lng = float(tiepoint[3])
-                    self.max_lat = float(tiepoint[4])
-                    self.max_lng = float(self.min_lng + raw_w * scale[0])
-                    self.min_lat = float(self.max_lat - raw_h * scale[1])
+            try:
+                with tifffile.TiffFile(dem_path) as tif:
+                    page = tif.pages[0]
+                    raw_dem = page.asarray().astype(float)
+                    # Parse exact GeoTIFF tiepoint and pixel scale tags if present
+                    if "ModelTiepointTag" in page.tags and "ModelPixelScaleTag" in page.tags:
+                        tiepoint = page.tags["ModelTiepointTag"].value
+                        scale = page.tags["ModelPixelScaleTag"].value
+                        raw_h, raw_w = raw_dem.shape
+                        self.min_lng = float(tiepoint[3])
+                        self.max_lat = float(tiepoint[4])
+                        self.max_lng = float(self.min_lng + raw_w * scale[0])
+                        self.min_lat = float(self.max_lat - raw_h * scale[1])
 
-            with tifffile.TiffFile(imp_path) as tif:
-                raw_imp = tif.pages[0].asarray().astype(float)
+                with tifffile.TiffFile(imp_path) as tif:
+                    raw_imp = tif.pages[0].asarray().astype(float)
+                
+                self.dem_loaded = True
+                self.imp_loaded = True
+                print(f"[HydroCast AI] Successfully loaded NASA SRTM DEM: {dem_path}")
+                print(f"[HydroCast AI] Successfully loaded Imperviousness raster: {imp_path}")
+            except Exception as e:
+                err_msg = f"Error reading TIFF rasters ({e})"
+                self.data_load_errors.append(err_msg)
+                print(f"[CRITICAL ERROR] {err_msg}")
+                raw_dem = np.full((162, 162), 380.0)
+                raw_imp = np.zeros((162, 162))
         else:
+            missing = []
+            if not dem_path or not os.path.exists(dem_path or ""):
+                missing.append("jaipur_SRTMGL1.tif")
+            if not os.path.exists(imp_path):
+                missing.append("imperviousness.tif")
+            err_msg = f"Missing required GeoTIFF data files in {self.data_dir}: {', '.join(missing)}"
+            self.data_load_errors.append(err_msg)
+            print(f"[CRITICAL ERROR] {err_msg}")
             # Fallback placeholder if files missing
             raw_dem = np.full((162, 162), 380.0)
             raw_imp = np.zeros((162, 162))
@@ -300,31 +325,44 @@ class RealCityDataLoader:
         nodes_file = os.path.join(os.path.dirname(__file__), "final_road_nodes.json")
 
         if os.path.exists(roads_file) and os.path.exists(nodes_file):
-            with open(roads_file, "r", encoding="utf-8") as f:
-                raw_roads = json.load(f)
-            with open(nodes_file, "r", encoding="utf-8") as f:
-                self.road_nodes = json.load(f)
+            try:
+                with open(roads_file, "r", encoding="utf-8") as f:
+                    raw_roads = json.load(f)
+                with open(nodes_file, "r", encoding="utf-8") as f:
+                    self.road_nodes = json.load(f)
 
-            self.road_segments = []
-            for r in raw_roads:
-                self.road_segments.append({
-                    "id": r["road_id"],
-                    "name": r["name"],
-                    "category": r["category"],
-                    "from_node": r["from_node"],
-                    "to_node": r["to_node"],
-                    "coordinates": r["coords"],
-                    "length_m": r["length_m"],
-                    "grid_x": r["grid_x"],
-                    "grid_y": r["grid_y"],
-                    "elevation_m": r["elevation_m"],
-                    "nearby_drain_id": r["nearby_drain_id"],
-                })
+                self.road_segments = []
+                for r in raw_roads:
+                    self.road_segments.append({
+                        "id": r["road_id"],
+                        "name": r["name"],
+                        "category": r["category"],
+                        "from_node": r["from_node"],
+                        "to_node": r["to_node"],
+                        "coordinates": r["coords"],
+                        "length_m": r["length_m"],
+                        "grid_x": r["grid_x"],
+                        "grid_y": r["grid_y"],
+                        "elevation_m": r["elevation_m"],
+                        "nearby_drain_id": r["nearby_drain_id"],
+                    })
 
-                for dn in self.drainage_nodes:
-                    if dn["id"] == r["nearby_drain_id"]:
-                        dn["affected_road_ids"].append(r["road_id"])
+                    for dn in self.drainage_nodes:
+                        if dn["id"] == r["nearby_drain_id"]:
+                            dn["affected_road_ids"].append(r["road_id"])
+                
+                self.roads_loaded = True
+                print(f"[HydroCast AI] Successfully loaded {len(self.road_segments)} OpenStreetMap arterial corridors from {roads_file}")
+            except Exception as e:
+                err_msg = f"Error reading road network JSON ({e})"
+                self.data_load_errors.append(err_msg)
+                print(f"[CRITICAL ERROR] {err_msg}")
+                self.road_nodes = []
+                self.road_segments = []
         else:
+            err_msg = f"Road network JSON files missing: {roads_file} or {nodes_file}"
+            self.data_load_errors.append(err_msg)
+            print(f"[CRITICAL ERROR] {err_msg}")
             self.road_nodes = []
             self.road_segments = []
 
